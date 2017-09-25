@@ -5,10 +5,12 @@ import logging
 import random
 import re
 import sqlite3
+import threading
+import asyncio
 
-from rtmbot.core import Plugin
+import discord
 
-from .komida_parser import KomidaUpdate
+from komida_parser import KomidaUpdate
 
 
 def get_campus(text):
@@ -24,8 +26,7 @@ def get_campus(text):
         A list with acronyms for all UAntwerp campuses that were mentioned in the text. Defaults to CMI if no campus is
         explicitly mentioned.
     """
-    campus_options = [('cde', ['cde', 'drie eiken']), ('cgb', ['cgb', 'groenenborger']),
-                      ('cmi', ['cmi', 'middelheim']), ('cst', ['cst', 'stad', 'city'])]
+    campus_options = [('cde', ['cde', 'drie eiken']),('cmi', ['cmi', 'middelheim']), ('cst', ['cst', 'stad', 'city'])]
 
     campus = sorted([c_code for c_code, c_texts in campus_options if any(c_text in text for c_text in c_texts)])
     return campus if len(campus) > 0 else ['cmi']
@@ -126,20 +127,65 @@ def format_menu(menu):
 
     return '\n'.join(message)
 
+'''
+class KomidaBot(discord.Client):
+    def __init__(self):
+        self.update = None
+        super(KomidaBot, self).__init__()
 
-class KomidaPlugin(Plugin):
+    @asyncio.coroutine
+    def on_ready(self):
+        self.update = KomidaUpdate()
+        self.updateMenu()
 
-    def __init__(self, name=None, slack_client=None, plugin_config=None):
-        """
-        Initialize the KomidaBot Slack plugin.
+    def updateMenu(self):
+        self.update.run()
+        t= threading.Timer(7200,self.updateMenu)
 
-        Includes a timed job to update the menu every hour.
-        """
-        super().__init__(name, slack_client, plugin_config)
 
-        # schedule an update of the menu every two hours
-        self.update = KomidaUpdate(7200)
-        self.jobs.append(self.update)
+    @asyncio.coroutine
+    def on_message(self,message):
+        print('Here')
+        if (message.author == self.user):
+            return
+        print('Here')
+        if (self.user not in message.mentions):
+            return
+        print('Here')
+        await self.send_message(message.channel, 'I was mentioned?')
+
+        text = temp.content.lower()
+            
+        campuses = get_campus(text)
+        dates = get_date(text)
+
+        # get the requested menus
+        menus = get_menu(campuses, dates)
+        # force a menu update if nothing could be found initially
+        if len(menus) == 0:
+            try:
+                logging.debug('No menu found, updating...')
+
+                this.send_message(message.channel, "I don't have the menu for {} on {}. Let me see if I can find it online...".format(', '.join(campuses).upper(), ', '.join([d.strftime('%A %d %B') for d in dates]))
+
+                # force a menu update and try to retrieve the requested menu again
+                self.update.run()
+                menus = get_menu(campuses, dates)
+            except Exception as e:
+                logging.exception('Problem while updating the menu: {}'.format(e))
+
+        # reply with the menu
+        if len(menus) > 0:
+            response = self.send_message(message.channel, 'bla')
+        # or send a final message that no menu could be found
+        else:
+            fail_gifs = ['https://giphy.com/gifs/monkey-laptop-baboon-xTiTnJ3BooiDs8dL7W',
+                         'https://giphy.com/gifs/office-space-jBBRs81dGWHIY',
+                         'https://giphy.com/gifs/computer-Zw133sEVc0WXK',
+                         'https://giphy.com/gifs/computer-D8kdCAJIoSQ6I',
+                         'https://giphy.com/gifs/richard-ayoade-it-crowd-maurice-moss-dbtDDSvWErdf2']
+            response = self.send_message(message.channel,"_COMPUTER SAYS NO._ I'm sorry, no menu has been found.\n{}".format(random.choice(fail_gifs)))
+        
 
     def process_message(self, data):
         """
@@ -233,3 +279,64 @@ class KomidaPlugin(Plugin):
         # check the error status of this message but don't try to resend
         if not response['ok']:
             logging.error('Failed to post to Slack: {}'.format(response['error']))
+'''
+
+def run():
+    client = discord.Client()
+    parser = KomidaUpdate()
+
+    def updateMenu():
+        parser.run()
+        t = threading.Timer(7200, updateMenu)
+
+    @client.event
+    async def on_ready():
+        updateMenu()
+
+
+    @client.event
+    async def on_message(message):
+
+        if message.author == client.user:
+            return
+        if client.user not in message.mentions:
+            return
+
+        text = message.content
+
+        campuses = get_campus(text)
+        dates = get_date(text)
+
+        # get the requested menus
+        menus = get_menu(campuses, dates)
+
+        # force a menu update if nothing could be found initially
+        if len(menus) == 0:
+            await client.send_message(message.channel, "I don't have the menu for {} on {}. Let me see if I can find it online...".format(', '.join(campuses).upper(), ', '.join([d.strftime('%A %d %B') for d in dates])))
+
+            # force a menu update and try to retrieve the requested menu again
+            parser.run() 
+            menus = get_menu(campuses, dates)
+
+        # reply with the menu
+        if len(menus) > 0:
+            # STILL FIND THE MENU
+            attachments = create_attachments(menus)
+            for att in attachments:
+                await client.send_message(message.channel,att['title']+'\n'+att['text'])
+        # or send a final message that no menu could be found
+        else:
+            fail_gifs = ['https://giphy.com/gifs/monkey-laptop-baboon-xTiTnJ3BooiDs8dL7W',
+                         'https://giphy.com/gifs/office-space-jBBRs81dGWHIY',
+                         'https://giphy.com/gifs/computer-Zw133sEVc0WXK',
+                         'https://giphy.com/gifs/computer-D8kdCAJIoSQ6I',
+                         'https://giphy.com/gifs/richard-ayoade-it-crowd-maurice-moss-dbtDDSvWErdf2']
+            await client.send_message(message.channel,"_COMPUTER SAYS NO._ I'm sorry, no menu has been found.\n{}".format(random.choice(fail_gifs)))
+
+
+    client.run('MzU4NjY1MTkwMjM1MDQ1ODg4.DKfxsQ.K6fhXxQ9EwAo8sFkplooHln2s0o')
+
+
+if __name__ == '__main__':
+    run()
+    
