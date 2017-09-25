@@ -1,7 +1,10 @@
 komidabot
 =========
+THIS IS STILL A WORK IN PROGRESS
+[Wout Bittremieux's `komidabot`](https://github.com/bittremieux/komidabot), adapted for [Discord](https://discordapp.com).
+This is based on both his and [lynn;s `komidabot`](https://github.com/lynn/komidabot)
 
-A Slack chat bot to request the daily menu at the [komida restaurants](https://www.uantwerpen.be/en/campus-life/catering/) of the [University of Antwerp](https://www.uantwerpen.be/en/).
+A Discord chat bot to request the daily menu at the [komida restaurants](https://www.uantwerpen.be/en/campus-life/catering/) of the [University of Antwerp](https://www.uantwerpen.be/en/).
 
 ![komidabot](komidabot.png)
 
